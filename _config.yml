@@ -1,1 +1,21 @@
-theme: jekyll-theme-cayman
+# Welcome to Jekyll!
+#
+# This config file is meant for settings that affect your whole blog, values
+# which you are expected to set up once and rarely need to edit after that.
+# For technical reasons, this file is *NOT* reloaded automatically when you use
+# 'jekyll serve'. If you change this file, please restart the server process.
+
+# Site settings
+title: 数据分析
+email: xiaomaoln@gmail.com
+description: > # this means to ignore newlines until "baseurl:"
+  协作共享
+baseurl: "/DataAnalysis" # the subpath of your site, e.g. /blog
+url: "http://paulran.github.io" # the base hostname & protocol for your site
+github_username:  paulran
+
+repository: paulran/DataAnalysis
+
+# Build settings
+markdown: kramdown
+  

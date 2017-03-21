@@ -1,0 +1,178 @@
+---
+layout: post
+title:  "利用基有帮基金评测刷选基金"
+date:   2017-03-21 00:00:00 +0800
+categories: pages update
+---
+
+```python
+from urllib2 import urlopen
+import lxml.html
+from lxml import etree
+import re
+from pandas.compat import StringIO
+import pandas as pd
+from datetime import datetime, timedelta
+from dateutil.parser import parse
+import json
+import xlwt
+```
+
+
+```python
+class FundData(object):
+
+    def __init__(self):
+        """Constructor"""
+        self.code = ''
+        self.name = ''
+        self.type_str = ''
+        self.type_num = 0
+        self.labels = ''
+        self.established_years = 0 # 已成立年数
+        self.earning_ability_score = 0  # 赚钱能力得分 0~100
+        self.anti_risk_ability_score = 0 # 抗风险能力得分 0~100
+        self.stability_score = 0 # 稳定性得分 0~100
+        self.bull_performance_score = 0 # 牛市表现得分 0~100
+        self.bear_performance_score = 0 # 熊市表现得分 0~100
+        self.final_evaluate_score = 0 # 最后的评估得分
+        self.final_evaluate_score_ranking = 0 # 最后的评估得分的同类排名
+        self.year_income = 0 # 年化收益值
+        self.year_rate_1 = 0 # 近1年涨跌幅
+```
+
+
+```python
+'''
+格式示例：
+<div class="fundlabel row">
+<span>偏股混合型</span><span>中高风险</span><span>中盘股</span></div>
+
+var fivePicture = {"id":"7106","code":"519095","all_name":"\u65b0\u534e\u884c\u4e1a\u5468\u671f\u8f6e\u6362\u6df7\u5408\u578b\u8bc1\u5238\u6295\u8d44\u57fa\u91d1","fund_name":"\u65b0\u534e\u884c\u4e1a\u5468\u671f\u8f6e\u6362\u6df7\u5408","fund_net":"1.961000","fund_net_time":"2017-03-20 00:00:00","last_rise":"0.306902","month_rise":"2.348643","month_rate_3":"8.342542","month_rate_6":"13.287117","year_rate_1":"14.277390","same_type_num":"2029","year_num":"6.7","ta_name":"\u65b0\u534e\u57fa\u91d1\u7ba1\u7406\u80a1\u4efd\u6709\u9650\u516c\u53f8","fund_type":"10201","year_income":"15.339442","year_income_ranking":"266","maxinum":"-50.36","maxinum_begin":"2015-06-12 00:00:00","maxinum_end":"2016-01-28 00:00:00","maxinum_ranking":"1631","month_max_fall_ranking":"1729","month_max_fall_begin":"2015-12-31 00:00:00","month_max_fall_end":"2016-01-29 00:00:00","style":"2","month_fall_average":"-3.97","month_fall_average_ranking":"1309","month_rise_chance":"56.79","month_rise_chance_ranking":"1621","month_fall_chance":"43.21","max_fall_time":"13.77","max_fall_time_ranking":"236","min_price":"100.00","fee_rate":0.6,"fund_status":"0","earning_ability_score":"80","anti_risk_ability_score":"50","stability_score":"75","bull_performance_score":"90","bear_performance_score":"73","concentration":"3","fund_money_type":"0","yield_7day":null,"yield_7day_ranking":"0","wan_per_nav":null,"score":"73","final_evaluate_score_ranking":"3278","final_evaluate_fund_num":"5051","fund_aacc":"162.549500","sim_up_num":"0.7989","sim_down_num":"0.1617","name":"\u504f\u80a1\u6df7\u5408\u578b","risk_info":"\u4e2d\u9ad8\u98ce\u9669","holdings_limited":"50%<\u80a1\u7968<70%","evaluation":"1","type":{"name":"\u504f\u80a1\u6df7\u5408\u578b","risk_info":"\u4e2d\u9ad8\u98ce\u9669","style":"\u4e2d\u76d8\u80a1"},"rate":"1.50","all_reta":{"management":"1.50","custodian":"0.25","purchase":{"0":{"RANGE":"0<\u4e70\u5165\u91d1\u989d<100\u4e07\u5143","RATET":"1.50"},"1":{"RANGE":"100\u4e07\u5143<\u4e70\u5165\u91d1\u989d<200\u4e07\u5143","RATET":"1.20"},"2":{"RANGE":"200\u4e07\u5143<\u4e70\u5165\u91d1\u989d<500\u4e07\u5143","RATET":"0.80"},"3":{"RANGE":"500\u4e07\u5143<\u4e70\u5165\u91d1\u989d","RATET":"1000.00"},"PRERATET":0.16},"saleInfo":[{"RANGE":"0\u5929<\u6301\u6709\u5929\u6570<364\u5929","RATET":"0.50"},{"RANGE":"364\u5929<\u6301\u6709\u5929\u6570<729\u5929","RATET":"0.30"},{"RANGE":"729\u5929<\u6301\u6709\u5929\u6570<1094\u5929","RATET":"0.10"},{"RANGE":"1094\u5929<\u6301\u6709\u5929\u6570","RATET":"0.00"}]},"fnvsum":"145724318.610000000000000000","deposits":"1.50000000","hsval":3.4558446581219,"cyval":11.516736684389,"bond_lclose":3.9973210846723}; //五位图、赚钱能力所需数据
+
+'''
+def get_fund_data(code):
+    try:
+        url = 'http://www.jiyoubang360.com/fundInfo/fundInfoPc/fCode/' + code
+        text = urlopen(url).read()
+    except:
+        # print code, 'not be found'
+        return None
+    
+    page = etree.HTML(text.lower().decode('utf-8'))
+    fundlabelclass = page.xpath(u'//div[@class="fundlabel row"]')
+    fundlabels = fundlabelclass[0].xpath(u'span')
+    if len(fundlabels) < 2:
+        return None
+    print code, fundlabels[0].text, fundlabels[1].text                    
+    
+    fund_data = FundData()
+    fund_data.code = code
+    fund_data.type_str = fundlabels[0].text
+    for i in range(1, len(fundlabels)):
+        fund_data.labels = fund_data.labels + ' ' + fundlabels[i].text
+        
+    scripts = page.xpath(u'/html/body/script[@type="text/javascript"]')
+    for script in scripts:
+        if script.text != None:
+            lines = re.split(r'\n', script.text)
+            for line in lines:
+                if re.search(r'var fivepicture = ', line):
+                    fivepicture_data = line.split('var fivepicture = ')[1].split(';')[0]
+                    fivepicture_json_data = json.loads(fivepicture_data)
+                    fund_data.name = fivepicture_json_data['fund_name'].upper()
+                    fund_data.type_num = fivepicture_json_data['fund_type']
+                    fund_data.established_years = fivepicture_json_data['year_num']
+                    fund_data.earning_ability_score = fivepicture_json_data['earning_ability_score']
+                    fund_data.anti_risk_ability_score = fivepicture_json_data['anti_risk_ability_score']
+                    fund_data.stability_score = fivepicture_json_data['stability_score']
+                    fund_data.bull_performance_score = fivepicture_json_data['bull_performance_score']
+                    fund_data.bear_performance_score = fivepicture_json_data['bear_performance_score']
+                    # fund_data.final_evaluate_score = fivepicture_json_data['final_evaluate_score']
+                    fund_data.final_evaluate_score_ranking = fivepicture_json_data['final_evaluate_score_ranking']
+                    try:
+                        fund_data.year_income = '%.2f'%(float(fivepicture_json_data['year_income']))
+                    except:
+                        print '%s, year_income=%s'%(code, fivepicture_json_data['year_income'])
+                        fund_data.year_income = 0
+                    try:
+                        fund_data.year_rate_1 = '%.2f'%(float(fivepicture_json_data['year_rate_1']))
+                    except:
+                        print '%s, year_rate_1=%s'%(code, fivepicture_json_data['year_rate_1'])
+                        fund_data.year_rate_1 = 0
+                    
+    return fund_data
+```
+
+
+```python
+# 加载基金列表
+fund_list_df = pd.read_csv('fund_list.csv', sep=',')
+fund_list_df
+```
+
+
+
+```python
+FUND_DATA_COLUMNS = ['code', 'name', 'type_str', 'type_num', 'labels', 'established_years', 
+                     'earning_ability_score', 'anti_risk_ability_score', 'stability_score', 
+                     'bull_performance_score', 'bear_performance_score', 'final_evaluate_score',
+                    'final_evaluate_score_ranking', 'year_income', 'year_rate_1'] 
+df = pd.DataFrame({'code':[], 'name':[], 'type_str':[], 'type_num':[], 'labels':[], 'established_years':[], 
+                     'earning_ability_score':[], 'anti_risk_ability_score':[], 'stability_score':[], 
+                     'bull_performance_score':[], 'bear_performance_score':[], 'final_evaluate_score':[],
+                    'final_evaluate_score_ranking':[], 'year_income':[], 'year_rate_1':[]})
+
+# 循环从网站抓取每只基金的数据
+# 也可以暴力循环所有可能的基金，但速度会比较慢，代码：
+# for i in range(1, 999999):
+#     code = "%06d"%(i)
+for i in range(len(fund_list_df)):
+    code = fund_list_df.ix[i]['基金代码']
+    fund_data = get_fund_data(code)
+    if fund_data != None:
+        df.ix[code] = pd.Series([fund_data.code, fund_data.name, fund_data.type_str, fund_data.type_num, fund_data.labels, fund_data.established_years, 
+                              fund_data.earning_ability_score, fund_data.anti_risk_ability_score, fund_data.stability_score, 
+                             fund_data.bull_performance_score, fund_data.bear_performance_score, fund_data.final_evaluate_score, 
+                             fund_data.final_evaluate_score_ranking, fund_data.year_income, fund_data.year_rate_1], index=FUND_DATA_COLUMNS)
+        
+
+# 保存到Excel文件
+df.to_excel('jiyoubang360.xlsx', columns=FUND_DATA_COLUMNS, index=False)
+print 'Success to finish .....'
+```
+   
+
+
+
+```python
+# 从Excel文件读取保存的数据
+new_fund_df = pd.read_excel('jiyoubang360.xlsx', columns=FUND_DATA_COLUMNS)
+new_fund_df
+```
+
+
+
+
+
+```python
+# 筛选股票型基金
+stock_fund_df = new_fund_df[new_fund_df.type_num==10100]
+stock_fund_df = stock_fund_df[stock_fund_df.established_years>2.0]
+#stock_fund_df = stock_fund_df[stock_fund_df.bear_performance_score>0]
+stock_fund_df = stock_fund_df[stock_fund_df.bull_performance_score>0]
+stock_fund_df = stock_fund_df[stock_fund_df.year_income>10]
+stock_fund_df = stock_fund_df[stock_fund_df.year_rate_1>15]
+stock_fund_df['final_evaluate_score'] = (stock_fund_df['bear_performance_score'] + stock_fund_df['bull_performance_score'] 
+    + stock_fund_df['stability_score'] + stock_fund_df['anti_risk_ability_score'] + stock_fund_df['earning_ability_score']) / 5.0
+stock_fund_df = stock_fund_df.sort_values(by=['final_evaluate_score'], ascending=[0])
+stock_fund_good_df = stock_fund_df[['code', 'name', 'labels', 'established_years', 'year_income', 'year_rate_1']]
+stock_fund_good_df.set_index(['code'])
+```
+
+
+<p>下载 <a href="{{ site.baseurl }}/data/jiyoubang360/fund_list.csv"> fund_list.csv</a>
+
+
+
+
